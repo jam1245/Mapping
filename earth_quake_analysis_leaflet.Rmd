@@ -1,0 +1,93 @@
+---
+title: "earthquake"
+author: "John"
+date: "August 4, 2017"
+output: html_document
+---
+
+Read in the appropirate libraries 
+```{r}
+library(readr)
+library(lubridate)
+library(xts)
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(DT)
+library(maps)
+library(maptools)
+library(viridisLite)
+library(highcharter)
+library(treemap)
+library(viridisLite)
+
+```
+
+read in the data and take a look under the hood. 
+```{r}
+database <- read_csv("C:/Users/John/projects/Mapping/earthquake-database/database.csv")
+
+head(database)
+summary(database)
+
+```
+```{r}
+
+quake <- database
+
+
+quake %>%
+  leaflet() %>%
+  addTiles() %>%
+  addMarkers(lat=quake$Latitude, lng=quake$Longitude, clusterOptions = markerClusterOptions(),
+             popup= paste(quake$Type,
+        "<br><strong>Magnitude: </strong>", quake$Magnitude,
+        "<br><strong>Depth: </strong>", quake$Depth,
+        "<br><strong>Date: </strong>", quake$Date,
+        "<br><strong>Date: </strong>", quake$Time
+          ))
+```
+
+
+```{r}
+quake %>%
+  leaflet() %>%
+  addTiles() %>%
+  addCircleMarkers(lat=quake$Latitude, lng=quake$Longitude, weight=1, radius=1,
+                   color= ifelse(quake$Magnitude>6.5,"red","yellow"),stroke=TRUE,
+                   popup= paste(quake$Type,
+        "<br><strong>Magnitude: </strong>", quake$Magnitude,
+        "<br><strong>Depth: </strong>", quake$Depth,
+        "<br><strong>Date: </strong>", quake$Date,
+        "<br><strong>Date: </strong>", quake$Time)) %>%
+  addLegend(labels=c("Magnitude > 6.5", "Magnitude < 6.5"), colors=c("red","yellow"))
+```
+Preparing data - converting lat and lon to country names 
+```{r}
+    world <- map('world', fill=TRUE, col="transparent", plot=FALSE)
+    IDs <- sapply(strsplit(world$names, ":"), function(x) x[1])
+    world_sp <- map2SpatialPolygons(world, IDs=IDs,
+                     proj4string=CRS("+proj=longlat +datum=WGS84"))
+    pointsSP <- SpatialPoints(cbind(x = quake$Longitude, y= quake$Latitude), 
+                    proj4string=CRS("+proj=longlat +datum=WGS84"))
+    indices <- over(pointsSP, world_sp)
+    stateNames <- sapply(world_sp@polygons, function(x) x@ID)
+    quake$Country <- stateNames[indices]
+    
+    quake_country <- quake[!is.na(quake$Country),]
+```
+
+
+```{r}
+
+sum_country <- quake_country %>%
+ group_by(Country) %>%
+summarise(Earthquakes=n())
+
+
+sum_country %>%
+  hchart("treemap", hcaes(x = Country, value = Earthquakes, color=Earthquakes)) %>%
+  hc_credits(enabled = TRUE, style = list(fontSize = "10px")) %>%
+  hc_title(text = "Earthquakes per Country")
+
+```
